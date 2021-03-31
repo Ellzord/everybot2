@@ -1,27 +1,55 @@
 require('dotenv').config();
 
+const _ = require('lodash');
 const Discord = require('discord.js');
 const client = new Discord.Client();
 
 client.once('ready', () => console.log('everybot2 is ready'));
 
+const cleanUpChannels = _.debounce(async () => { 
+
+    console.log("cleaning up channels");
+
+    const category = client.channels.resolve(process.env.DYNAMIC_ROOMS_CATEGORY_ID);
+    if (!category) return;
+
+    const channels = Array.from((await category.fetch()).children.values());
+
+    for (const channel of channels) {
+
+        if (channel.id === process.env.GIVE_ROOM_CHANNEL_ID || channel.id === process.env.DRAG_ME_IN_CHANNEL_ID) {
+            continue;
+        }
+        
+        if ((await channel.fetch()).members.size === 0) {
+            await channel.delete().catch(ex => console.warn(`failed to delete channel ${channel.id}`, ex));
+        }
+    }
+}, 1000);
+
 client.on('voiceStateUpdate', async (oldState, newState) => {
-    const guild = (!newState ? oldState : oldState).guild;
+    const guild = (newState ? newState : oldState).guild;
     if (!guild.available) return;
 
-    const member = await (!newState ? oldState : oldState).member.fetch().catch(console.error);
+    const member = await (newState ? newState : oldState).member.fetch().catch(console.error);
     if (!member) return;
 
     if (newState && newState.channelID === process.env.GIVE_ROOM_CHANNEL_ID) {
-
-        const basePermissions = ['VIEW_CHANNEL', 'CONNECT'];
-        const ownerPermissions = basePermissions.concat('MOVE_MEMBERS', 'MANAGE_CHANNELS', 'MUTE_MEMBERS');
 
         try {
 
             console.log(`creating channel for ${member.id}`);
 
-            const channel = await guild.channels.create(`${member.displayName}'s room`,  { type: 'voice', parent: process.env.DYNAMIC_ROOMS_CATEGORY_ID, permissionOverwrites: [ { id: guild.id, allow: basePermissions }, { id: member.id, allow: ownerPermissions } ] });
+            const basePermissions = ['VIEW_CHANNEL', 'CONNECT'];
+            const ownerPermissions = basePermissions.concat('MOVE_MEMBERS', 'MANAGE_CHANNELS', 'MUTE_MEMBERS');
+
+            const channelOptions = { 
+                type: 'voice', 
+                parent: process.env.DYNAMIC_ROOMS_CATEGORY_ID, 
+                permissionOverwrites: [ { id: guild.id, allow: basePermissions }, { id: member.id, allow: ownerPermissions } ] 
+            };
+
+            const channel = await guild.channels.create(`${member.displayName}'s room`,  channelOptions);
 
             await member.voice.setChannel(channel);
     
@@ -31,23 +59,8 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
     }
 
-    const staticChannels = [process.env.GIVE_ROOM_CHANNEL_ID, process.env.DRAG_ME_IN_CHANNEL_ID];
-
-    if (oldState && !staticChannels.includes(oldState.channelID) && (!newState || newState.channelID !== oldState.channelID)) {
-
-        console.log("cleaning up channels");
-
-        const category = guild.channels.resolve(process.env.DYNAMIC_ROOMS_CATEGORY_ID);
-        if (!category) return;
-
-        Array
-          .from(category.children.filter(channel => !staticChannels.includes(channel.id) && channel.members.size === 0).values())
-          .forEach(channel => {
-              channel
-                .delete()
-                .then(() => console.log(`channel ${channel.id} deleted`))
-                .catch(ex => console.error(`failed to delete channel ${channel.id}`, ex));
-          });
+    if (oldState && (!newState || newState.channelID !== oldState.channelID)) {
+        cleanUpChannels();
     }
 });
 
