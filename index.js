@@ -3,9 +3,7 @@ require('dotenv').config();
 const Discord = require('discord.js');
 const client = new Discord.Client();
 
-client.once('ready', () => {
-	console.log('everybot2 is ready');
-});
+client.once('ready', () => console.log('everybot2 is ready'));
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     const guild = (!newState ? oldState : oldState).guild;
@@ -53,5 +51,8 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 });
 
+client.on('error', console.error);
+
+client.on('warn', console.warn);
 
 client.login(process.env.DISCORD_TOKEN);
