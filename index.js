@@ -25,7 +25,7 @@ const cleanUpChannels = _.debounce(async () => {
             await channel.delete().catch(ex => console.warn(`failed to delete channel ${channel.id}`, ex));
         }
     }
-}, 1000);
+}, 300, { maxWait: 1500 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     const guild = (newState ? newState : oldState).guild;
